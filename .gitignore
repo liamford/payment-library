@@ -1,0 +1,74 @@
+# Build directories
+/build/
+/out/
+
+# IDE directories and files
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# Log files
+*.log
+
+# Dependency directories
+/lib/
+/libs/
+
+# Gradle
+.gradle/
+gradle/
+
+# Maven
+target/
+
+# IntelliJ
+*.iml
+.idea/
+out/
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# NetBeans
+nbproject/
+
+# VS Code
+.vscode/
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# IntelliJ
+*.iml
+.idea/
+out/
+.roomodes
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# NetBeans
+nbproject/
+
+# VS Code
+.vscode/
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+build/
+
+# Other
+*.bak
+*.orig

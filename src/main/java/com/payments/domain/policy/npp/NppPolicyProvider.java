@@ -1,11 +1,11 @@
 package com.payments.domain.policy.npp;
 
 import com.payments.domain.entity.DomesticPayment;
-import org.springframework.stereotype.Component;
+// import org.springframework.stereotype.Component;
 
 import java.util.List;
 
-@Component
+// @Component
 public class NppPolicyProvider {
     private final List<NppPaymentPolicy> policies;
 

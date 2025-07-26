@@ -2,9 +2,9 @@ package com.payments.domain.policy.npp;
 
 
 import com.payments.domain.entity.DomesticPayment;
-import org.springframework.stereotype.Component;
+// import org.springframework.stereotype.Component;
 
-@Component
+// @Component
 public class NppBicValidationPolicy implements NppPaymentPolicy {
     @Override
     public boolean isSatisfiedBy(DomesticPayment context) {
