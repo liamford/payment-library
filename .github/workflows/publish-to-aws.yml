@@ -36,8 +36,6 @@ jobs:
           --output text)
         echo "CODEARTIFACT_AUTH_TOKEN=$CODEARTIFACT_AUTH_TOKEN" >> $GITHUB_ENV
 
-    - name: Run tests
-      run: ./gradlew test
 
     - name: Build with Gradle
       run: ./gradlew build
