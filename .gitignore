@@ -72,3 +72,5 @@ build/
 # Other
 *.bak
 *.orig
+/.idea/
+/.vscode/
