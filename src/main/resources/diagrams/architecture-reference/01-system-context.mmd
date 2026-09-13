@@ -1,0 +1,21 @@
+%% Current state. Sources: infra/lib/servo-stack.ts, openapi/*.yaml, infra/lib/config/environments.ts. Verified 2026-09-13.
+flowchart LR
+  Applicant[Applicant] --> Customer[Customer web app / customer API]
+  Employer[Business user] --> Business[Business web app / business API]
+  Operator[Administrator] --> Admin[Admin web app / admin API]
+  Partner[Partner system] --> PartnerApi[Partner API]
+  Customer & Business & Admin & PartnerApi --> Edge[CloudFront, Route 53, WAF in prod]
+  Edge --> APIs[API Gateway: customer, business, admin]
+  APIs --> Servo[Servo serverless platform]
+  Servo --> Stripe[Stripe: payments and signed callbacks]
+  Servo --> Rekognition[Amazon Rekognition: liveness, face compare, labels]
+  Servo --> Bedrock[Amazon Bedrock: adjudication, chat, draft assistance]
+  Servo --> Acic[ACIC NSS SOAP\nreal prod / mock sandbox]
+  Servo --> Vevo[VEVO SOAP\nonly when requested with consent]
+  Servo --> Messaging[SES email / SNS SMS]
+  Servo -. alarms .-> Slack[Slack operations notifications]
+  style Servo fill:#6C5CE7,color:#fff
+  style Bedrock fill:#6C5CE7,color:#fff
+  style Stripe fill:#E17055,color:#fff
+  style Acic fill:#E17055,color:#fff
+  style Vevo fill:#E17055,color:#fff

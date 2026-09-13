@@ -1,0 +1,103 @@
+%% Current state. Source: infra/lib/stacks/verification-stack.ts. Verified 2026-09-13.
+sequenceDiagram
+    participant SM as StateMachine
+    participant PE as PrepareEvidence
+    participant ADJ as Adjudicate
+    participant SR as StoreResult
+    participant VV as CheckVEVO
+    participant AC as SubmitToACIC
+    participant PO as PollACIC
+    participant HT as HandleACICTimeout
+    participant SAR as StoreACICResult
+    participant MR as MergeResults
+    participant DG as CheckDisputeGate
+    participant OW as OpenDisputeWindow
+    participant GC as GeneratePoliceCert
+    participant GVC as GenerateVevoCert
+    participant SN as SendNotification
+    participant ER as HandleError
+
+    alt resume_after_manual_review == true
+        SM->>SM: RouteStart → ResumeExternalChecks → VevoGate
+    else default
+        SM->>PE: invoke
+        Note over PE: Rekognition CompareFaces + DetectFaces<br/>Name-chain verify, Tier check
+    end
+
+    SM->>ADJ: invoke (documents + selfie + prompt)
+    Note over ADJ: Bedrock Claude Sonnet 4.6 vision<br/>guardrail and enforced formatter tool<br/>max 4096 tokens and 90s call timeout
+    Note over ADJ: Malformed output retries primary up to 3 times<br/>then validates and invokes fallback profile on failure
+
+    SM->>SR: invoke
+    Note over SR: Write result to DynamoDB
+
+    alt final_status == OK
+        alt vevo_requested + vevo_consent_given
+            SM->>VV: invoke
+            Note over VV: SOAP DHA VEVO<br/>Work entitlement check
+
+            alt VEVO ERROR / UNAVAILABLE
+                Note over SM: VevoErrorGate<br/>final_status=NEEDS_REVIEW, vevo_error=true
+                SM->>SN: HandleVevoError → SendNotification
+                Note over SN: Updates DynamoDB state<br/>to MANUAL_REVIEW
+                Note over SM: Exit, skip ACIC
+            else SUCCEEDED / NOT_APPLICABLE
+                Note over SM: Always continue to ACIC<br/>regardless of VEVO result
+            end
+        else
+            Note over SM: VevoSkipped (Parameters+JsonMerge)<br/>vevo_check=NOT_APPLICABLE<br/>preserves existing payload
+        end
+
+        opt VEVO succeeded (or not requested)
+            SM->>AC: invoke
+            Note over AC: SOAP ACIC NSS<br/>SubmitCheckRequest
+
+            Note over SM: Wait 30s(sandbox)/60m(prod)
+
+            loop 10s sandbox / 24h prod, max 90 days
+                SM->>PO: invoke
+                Note over PO: SOAP GetResultRequest
+
+                alt NDCO / DCO
+                    SM->>SAR: invoke
+                    Note over SM: Exit polling loop
+                else elapsed_days >= 90
+                    SM->>HT: invoke
+                    Note over HT: Set ACIC_TIMEOUT state<br/>Emit TimeoutCount metric
+                    Note over SM: Exit polling loop
+                else POLLFAILED/REFERRED
+                    Note over SM: Wait 10s(sandbox)/24h(prod)<br/>retry
+                end
+            end
+
+            SM->>MR: MergeResults
+            Note over MR: Pass-through (no-op)<br/>Sequential flow has no parallel_results<br/>Data already in event payload
+
+            SM->>DG: CheckDisputeGate
+
+            alt ACIC DCO
+                SM->>OW: invoke
+                Note over OW: Open 48h dispute window<br/>email applicant result detail<br/>NO certificate, NO employer/third-party delivery
+                Note over SM: SFN ends here for DCO<br/>close-dispute-window finalises later
+            else NDCO / non-DCO
+                SM->>GC: invoke
+                Note over GC: Generate police check PDF<br/>prefix P when applicable
+                SM->>GVC: invoke
+                Note over GVC: Generate VEVO certificate PDF<br/>prefix V, requires VEVO SUCCEEDED
+            end
+        end
+
+    else NEEDS_REVIEW
+        Note over SM: Skip ACIC/VEVO<br/>Send notification directly
+    end
+
+    opt NDCO / non-DCO immediate finalisation
+        SM->>SN: invoke
+        Note over SN: Email police check + VEVO<br/>certificate PDFs via SES<br/>SMS via SNS
+    end
+
+    rect rgb(200, 40, 40)
+        Note over SM,ER: Global Catch: States.ALL on every task
+        ER-->>SM: Error handler invoked
+        Note over ER: Log error to CloudWatch<br/>Update app state to ERROR<br/>Notify ops via SNS
+    end

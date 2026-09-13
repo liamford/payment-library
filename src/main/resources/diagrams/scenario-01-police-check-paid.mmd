@@ -1,0 +1,49 @@
+%% Current state. Sources: individual API, verification stack, payment handlers. Verified 2026-09-13.
+flowchart TD
+    subgraph Applicant["Applicant"]
+        A[Sign up] --> B[Fill application]
+        B --> C[Upload docs + selfie]
+        C --> D[Pay]
+        D --> E[Submit]
+    end
+
+    subgraph Pipeline["Verification Pipeline"]
+        F[Prepare Evidence<br/>Rekognition face compare<br/>Name chain, tier]
+        G[Adjudicate<br/>Bedrock Claude Sonnet 4.6]
+        H{Decision?}
+        I[Store Result]
+        J[SubmitToACIC<br/>SOAP check]
+        K[Poll ACIC<br/>every 24h, max 90d]
+        L{ACIC result?}
+        M[StoreACICResult]
+        N[MergeResults<br/>pass-through]
+        DG{CheckDisputeGate}
+        O1[Generate Police Check Certificate<br/>prefix P]
+    end
+
+    subgraph Result["Result"]
+        DCO[Open dispute window<br/>5m sandbox / 48h prod<br/>applicant sees DCO detail; certificate held]
+        DCO_close[Waive, expire, withdraw,<br/>or admin resolve]
+        P_result[Email certificate PDF<br/>+ SMS to applicant<br/>RESULT_APPROVED template]
+        P_review[Email manual review notice<br/>to applicant<br/>RESULT_MANUAL_REVIEW template]
+    end
+
+    E --> SQ[Submission SQS → workflow-trigger] --> F --> G --> H
+    H -->|OK| I
+    H -->|NEEDS_REVIEW| P_review
+    I --> J --> K --> L
+    L -->|NDCO/DCO| M --> N --> DG
+    DG -->|NDCO| O1 --> P_result
+    DG -->|DCO| DCO --> DCO_close --> O1
+    DG -->|timeout / non-DCO| O1
+    L -->|timeout >= 90d| N --> DG
+    L -->|POLLFAILED/REFERRED| K
+
+    style DG fill:#6C5CE7,color:#fff
+    style DCO fill:#D63031,color:#fff
+    style DCO_close fill:#FDCB6E,color:#333
+    style O1 fill:#FDCB6E,color:#333
+    style G fill:#6C5CE7,color:#fff
+    style J fill:#E17055,color:#fff
+    style P_result fill:#00B894,color:#fff
+    style P_review fill:#D63031,color:#fff

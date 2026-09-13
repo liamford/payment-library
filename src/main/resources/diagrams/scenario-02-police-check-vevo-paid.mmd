@@ -1,0 +1,57 @@
+%% Current state. Sources: individual API, verification stack, payment handlers. Verified 2026-09-13.
+flowchart TD
+    subgraph Applicant["Applicant"]
+        A[Sign up] --> B[Fill application]
+        B --> C[Upload docs + selfie]
+        C --> D[Pay]
+        D --> E[Submit]
+    end
+
+    subgraph Pipeline["Verification Pipeline"]
+        F[Prepare Evidence<br/>Rekognition face compare<br/>Name chain, tier]
+        G[Adjudicate<br/>Bedrock Claude Sonnet 4.6]
+        H{Decision?}
+        I[Store Result]
+        J[Check VEVO<br/>SOAP DHA work entitlement]
+        K{VEVO error?}
+        L[SubmitToACIC<br/>SOAP police check]
+        M[Poll ACIC<br/>every 24h, max 90d]
+        N{ACIC result?}
+        O[StoreACICResult]
+        P[MergeResults<br/>pass-through]
+        DG{CheckDisputeGate}
+        Q1[Generate Police Check Certificate<br/>prefix P]
+        Q2[Generate VEVO Certificate<br/>prefix V<br/>requires VEVO SUCCEEDED]
+    end
+
+    subgraph Result["Result"]
+        DCO[Open dispute window<br/>5m sandbox / 48h prod<br/>applicant sees DCO detail; certificates held]
+        DCO_close[Waive, expire, withdraw,<br/>or admin resolve]
+        R_result[Email both certificate PDFs<br/>+ SMS to applicant<br/>RESULT_APPROVED template]
+        R_review[Email manual review notice<br/>to applicant + employer<br/>RESULT_MANUAL_REVIEW template]
+    end
+
+    E --> SQ[Submission SQS → workflow-trigger] --> F --> G --> H
+    H -->|OK| I
+    H -->|NEEDS_REVIEW| R_review
+    I --> J --> K
+    K -->|ERROR / UNAVAILABLE| R_review
+    K -->|SUCCEEDED / NOT_APPLICABLE| L
+    L --> M --> N
+    N -->|NDCO/DCO| O --> P --> DG
+    DG -->|NDCO| Q1 --> Q2 --> R_result
+    DG -->|DCO| DCO --> DCO_close --> Q1
+    DG -->|timeout / non-DCO| Q1
+    N -->|timeout >= 90d| P --> DG
+    N -->|POLLFAILED/REFERRED| M
+
+    style DG fill:#6C5CE7,color:#fff
+    style DCO fill:#D63031,color:#fff
+    style DCO_close fill:#FDCB6E,color:#333
+    style Q1 fill:#FDCB6E,color:#333
+    style Q2 fill:#E17055,color:#fff
+    style G fill:#6C5CE7,color:#fff
+    style J fill:#0984E3,color:#fff
+    style K fill:#D63031,color:#fff
+    style R_result fill:#00B894,color:#fff
+    style R_review fill:#D63031,color:#fff

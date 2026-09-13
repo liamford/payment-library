@@ -1,0 +1,36 @@
+%% Current state. Sources: dispute APIs and verification dispute handlers. Verified 2026-09-13.
+stateDiagram-v2
+    [*] --> RESULT_IN: ACIC result stored
+    RESULT_IN --> DISPUTE_WINDOW_OPEN: DCO / OpenDisputeWindow
+    RESULT_IN --> COMPLETED: NDCO or non-DCO finalisation
+
+    DISPUTE_WINDOW_OPEN --> DISPUTE_WINDOW_CLOSED: Applicant accepts result / waive
+    DISPUTE_WINDOW_OPEN --> DISPUTE_WINDOW_CLOSED: 48h deadline reached / sweep
+    DISPUTE_WINDOW_OPEN --> DISPUTE_RAISED: Applicant raises singleton dispute
+
+    DISPUTE_RAISED --> DISPUTE_RAISED: Admin replies / asks for evidence
+    DISPUTE_RAISED --> DISPUTE_RAISED: Customer adds message
+    DISPUTE_RAISED --> MANUAL_REVIEW: Admin escalates
+    DISPUTE_RAISED --> DISPUTE_WINDOW_CLOSED: Applicant withdraws
+    DISPUTE_RAISED --> DISPUTE_WINDOW_CLOSED: Admin resolves ORIGINAL_STANDS
+    DISPUTE_RAISED --> DISPUTE_WINDOW_CLOSED: Admin resolves AMENDED
+
+    DISPUTE_WINDOW_CLOSED --> COMPLETED: close-dispute-window finalises
+    COMPLETED --> [*]
+    MANUAL_REVIEW --> [*]
+
+    note right of DISPUTE_WINDOW_OPEN
+      Applicant can view DCO detail. Window is 5m sandbox, 48h prod.
+      Certificate and external delivery are held.
+    end note
+
+    note right of DISPUTE_RAISED
+      Dispute header is SK=DISPUTE.
+      Thread messages use DISPUTEMSG#...
+      Admin queue uses GSI8 DISPUTE#OPEN.
+    end note
+
+    note right of DISPUTE_WINDOW_CLOSED
+      Certificate and delivery are best-effort.
+      Delivery failures are observable and retryable.
+    end note

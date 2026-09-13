@@ -1,0 +1,27 @@
+%% Current state. Source: infra/lib/stacks/verification-stack.ts. Verified 2026-09-13.
+flowchart TD
+  Start{resume_after_manual_review?} -->|yes| Resume[ResumeExternalChecks]
+  Start -->|no| Prepare[PrepareEvidence\n70s; TaskFailed retry x2]
+  Prepare --> Adj[AdjudicateApplication\n130s; provider and task retry policies]
+  Adj --> Store[StoreResult] --> Status{final_status == OK?}
+  Resume --> VevoGate
+  Status -->|no| Notify[SendNotification]
+  Status -->|yes| VevoGate{VEVO requested and consent given?}
+  VevoGate -->|yes| VEVO[CheckVEVO\n90s; retry x2] --> VevoError{ERROR / UNAVAILABLE?}
+  VevoGate -->|no| Skip[VevoSkipped: NOT_APPLICABLE]
+  VevoError -->|yes| Review[Set NEEDS_REVIEW, vevo_error] --> Notify
+  VevoError -->|no| AcicGate
+  Skip --> AcicGate{terminal ACIC result already present?}
+  AcicGate -->|yes| DisputeGate
+  AcicGate -->|no| SubmitACIC[SubmitToACIC] --> InitialWait[Wait 30s sandbox / 3600s prod]
+  InitialWait --> Poll[PollACICStatus] --> Result{NDCO / DCO?}
+  Result -->|yes| StoreAcic[StoreACICResult] --> Merge[MergeResults] --> DisputeGate{DCO?}
+  Result -->|POLLFAILED / REFERRED under 90d| Daily[Wait 10s sandbox / 86400s prod] --> Poll
+  Result -->|otherwise| Timeout[HandleACICTimeout] --> Merge
+  DisputeGate -->|yes| Open[OpenDisputeWindow; workflow ends]
+  DisputeGate -->|no| Police[GenerateCertificate] --> VevoCert[GenerateVevoCertificate] --> Notify
+  Prepare -.->|States.ALL catch| Error[HandleError: ERROR state + ops notification]
+  Adj -.->|States.ALL catch| Error
+  style Adj fill:#6C5CE7,color:#fff
+  style Open fill:#FDCB6E,color:#333
+  style Error fill:#D63031,color:#fff

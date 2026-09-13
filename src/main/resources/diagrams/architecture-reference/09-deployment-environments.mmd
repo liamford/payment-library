@@ -1,0 +1,12 @@
+%% Current state. Sources: environments.ts, DEPLOYMENT.md, GitHub Actions workflows. Verified 2026-09-13.
+flowchart TB
+  GitHub[GitHub Actions with OIDC] --> Backend[Backend: preflight, synth/diff, CDK deploy, smoke/verification]
+  GitHub --> Frontend[Frontend: read stack outputs, build, upload S3, CloudFront invalidate]
+  Backend --> APSE2[ap-southeast-2: application stacks]
+  Backend --> USE1[us-east-1: CloudFront ACM certificate stack]
+  APSE2 --> Sandbox[sandbox: mock ACIC, WAF off, 30s initial ACIC wait, 5-minute dispute window]
+  APSE2 --> Prod[prod: real ACIC endpoint, WAF on, MFA required, 1-hour initial ACIC wait, 48-hour dispute window]
+  Sandbox & Prod --> Shared[Rekognition liveness in ap-northeast-1; notifications enabled]
+  style GitHub fill:#2D3436,color:#fff
+  style Sandbox fill:#0984E3,color:#fff
+  style Prod fill:#6C5CE7,color:#fff

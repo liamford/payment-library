@@ -1,0 +1,41 @@
+%% Current state. Source: infra/lambda/verification/adjudicate/index.ts. Verified 2026-09-13.
+flowchart TD
+    Bedrock[Claude Sonnet returns<br/>formatter-tool structured result] --> Validate[Validate required fields,<br/>decision/check values and reason codes] --> Decision{Decision?}
+
+    Decision -->|OK| OK[OK]
+    Decision -->|NEEDS_REVIEW| NR[NEEDS_REVIEW]
+
+    subgraph Checks["4 THINGS THE LLM CHECKS"]
+        C1["document_authenticity<br/>tamper, expiry, holograms"]
+        C2["face_corroboration<br/>selfie vs ID photo"]
+        C3["data_consistency<br/>name/DOB/POB match across docs<br/>if name change → verify linking docs"]
+        C4["tier_coverage<br/>all required doc tiers met"]
+    end
+
+    subgraph Reasons["REASON CODES"]
+        direction LR
+        R1["DATA_MISMATCH<br/>DOB_MISMATCH<br/>POB_MISMATCH"]
+        R2["DOC_NUMBER_MISMATCH<br/>GENDER_MISMATCH<br/>ISSUING_COUNTRY_MISMATCH"]
+        R3["UNDECLARED_NAME_ON_DOC<br/>POSSIBLE_TAMPER<br/>EXPIRED_DOCUMENT"]
+        R4["FACE_DISAGREEMENT<br/>INSUFFICIENT_TIER<br/>VISA_PAIRING_MISSING"]
+        R5["MRZ_NATIONALITY_MISMATCH<br/>PURPOSE_TOO_GENERIC<br/>PROMPT_INJECTION_DETECTED"]
+    end
+
+    subgraph Extracted["WHAT THE LLM READS FROM DOCS"]
+        E1["Body text: dob, doc numbers, POB, gender"]
+        E2["MRZ: dob, doc number, expiry, nationality"]
+    end
+
+    OK -.-> C1 & C2 & C3 & C4
+    C1 & C2 & C3 & C4 -.-> Reasons
+    Checks -.-> Extracted
+
+    OK --> Next1["Then → Override Rules"]
+    NR --> Next2["Then → Override Rules"]
+
+    style Bedrock fill:#6C5CE7,color:#fff
+    style OK fill:#00B894,color:#fff
+    style NR fill:#D63031,color:#fff
+    style Checks fill:#fff3e0,color:#000
+    style Reasons fill:#e1f5fe,color:#000
+    style Extracted fill:#f3e5f5,color:#000

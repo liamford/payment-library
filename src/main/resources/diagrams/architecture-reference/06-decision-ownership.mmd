@@ -1,0 +1,13 @@
+%% Current state. Sources: API handlers, prepare-evidence, adjudicate, verification-stack. Verified 2026-09-13.
+flowchart LR
+  Submit[Submission API] -->|required fields, consent, payment/credit state| Queue[SQS dispatch]
+  Queue --> Evidence[PrepareEvidence] -->|file sizes/pages, tier coverage, name-chain structure, biometric values| Preflight[Deterministic adjudication preflight]
+  Preflight -->|eligible visual assessment| Model[Claude Sonnet + guardrail]
+  Model -->|authenticity, document data consistency, face corroboration, tier assessment| Server[Server validation and overrides]
+  Server -->|OK| External[VEVO gate then ACIC]
+  Server -->|NEEDS_REVIEW| Human[Admin manual review]
+  External -->|DCO| Dispute[Applicant dispute window and admin resolution]
+  External -->|NDCO/non-DCO| Deliver[Certificate and notification]
+  style Model fill:#6C5CE7,color:#fff
+  style Human fill:#D63031,color:#fff
+  style Deliver fill:#00B894,color:#fff

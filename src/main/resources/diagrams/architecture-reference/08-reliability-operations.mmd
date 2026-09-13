@@ -1,0 +1,15 @@
+%% Current state. Sources: verification-stack.ts, monitoring-stack.ts, verification handlers. Verified 2026-09-13.
+flowchart TD
+  API[API and submission queue] --> DLQ[Shared SQS DLQ]
+  SFN[Step Functions Standard execution\n91-day timeout; execution logging without execution data] --> Retry[Task-specific retry policies]
+  Retry --> Error[HandleError: application ERROR, logs, SNS ops notification]
+  Bedrock[Bedrock adjudication] --> Guardrail[Guardrail block => NEEDS_REVIEW, no fallback]
+  Bedrock --> Fallback[Malformed/provider failures => primary retry and validated fallback]
+  Delivery[Dispute delivery SQS] --> DeliveryWorker[Delivery Lambda] --> DeliveryDLQ[Delivery DLQ + recovery handler]
+  Metrics[Custom metrics + AWS service metrics] --> Alarms[CloudWatch alarms: API, workflow, Bedrock, DDB, liveness, DLQs, delivery]
+  Alarms --> SNS[SNS] --> Slack[Slack notifier]
+  Trace[X-Ray: API Gateway and VerifiedLambda] -. correlation .-> Metrics
+  Sandbox[Sandbox] --> Mocks[Conditional ACIC and VEVO mock stacks]
+  style Error fill:#D63031,color:#fff
+  style Guardrail fill:#D63031,color:#fff
+  style Slack fill:#0984E3,color:#fff

@@ -1,0 +1,59 @@
+%% Current state. Sources: business API, verification stack, invitation/credit handlers. Verified 2026-09-13.
+flowchart TD
+    subgraph Business["Business"]
+        B1[Register<br/>ABN validated,<br/>PENDING_APPROVAL] --> B2[Admin approves]
+        B2 --> B3[Purchase credits<br/>via Stripe/Airwallex]
+        B3 --> B4[Invite staff<br/>credit reserved,<br/>SES invitation email sent]
+    end
+
+    subgraph Applicant["Applicant"]
+        A1[Receives email<br/>clicks invite link] --> A2[Sign up / Sign in]
+        A2 --> A3[Fill application<br/>personal details, address,<br/>identity docs]
+        A3 --> A4[Upload docs + selfie]
+        A4 --> A5[Submit<br/>no payment needed<br/>credits already reserved]
+    end
+
+    subgraph Pipeline["Verification Pipeline"]
+        F[Prepare Evidence<br/>Rekognition face compare<br/>Name chain, tier]
+        G[Adjudicate<br/>Bedrock Claude Sonnet 4.6]
+        H{Decision?}
+        I[Store Result]
+        J[SubmitToACIC<br/>SOAP police check]
+        K[Poll ACIC<br/>every 24h, max 90d]
+        L{ACIC result?}
+        M[StoreACICResult]
+        N[MergeResults<br/>pass-through]
+        DG{CheckDisputeGate}
+    end
+
+    subgraph Result["Result"]
+        DCO[Open dispute window<br/>5m sandbox / 48h prod<br/>applicant sees DCO detail; business sees RESULT_PENDING]
+        DCO_close[Waive, expire, withdraw,<br/>or admin resolve]
+        P_staff[RESULT_BUSINESS_STAFF<br/>inform applicant check completed<br/>no results or certificate delivered]
+        P_biz[RESULT_BUSINESS_ALERT<br/>notify business to view results<br/>on dashboard]
+        P_review[MANUAL_REVIEW notice<br/>to applicant + employer]
+        P_credit[Credit consumed<br/>from reserved balance]
+    end
+
+    B4 -.-> A1
+    A5 --> SQ[Submission SQS → workflow-trigger] --> F --> G --> H
+    H -->|OK| I
+    H -->|NEEDS_REVIEW| P_review
+    I --> J --> K --> L
+    L -->|NDCO/DCO| M --> N --> DG
+    DG -->|NDCO| P_staff --> P_biz --> P_credit
+    DG -->|DCO| DCO --> DCO_close --> P_staff
+    DG -->|timeout / non-DCO| P_staff
+    L -->|timeout >= 90d| N --> DG
+    L -->|POLLFAILED/REFERRED| K
+
+    style DG fill:#6C5CE7,color:#fff
+    style DCO fill:#D63031,color:#fff
+    style DCO_close fill:#FDCB6E,color:#333
+    style G fill:#6C5CE7,color:#fff
+    style B2 fill:#00B894,color:#fff
+    style B3 fill:#0984E3,color:#fff
+    style B4 fill:#E17055,color:#fff
+    style P_staff fill:#0984E3,color:#fff
+    style P_biz fill:#00B894,color:#fff
+    style P_review fill:#D63031,color:#fff

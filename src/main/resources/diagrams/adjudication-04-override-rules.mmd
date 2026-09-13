@@ -1,0 +1,42 @@
+%% Current state. Source: infra/lambda/verification/adjudicate/index.ts. Verified 2026-09-13.
+flowchart TD
+    Start[LLM returned OK or NEEDS_REVIEW] --> Save[Save model_decision]
+
+    Save --> R1
+
+    R1{"R1: Biometric fail?<br/>sim < 90% OR liveness < review?"}
+    R1 -->|YES| NR1[NEEDS_REVIEW<br/>code=FACE_DISAGREEMENT]
+    R1 -->|NO| R2
+
+    R2{"R2: Biometric rescue?<br/>NR with only FACE_DISAGREEMENT<br/>AND sim >= 98%, liveness passed, 1 face?"}
+    R2 -->|YES| Rescue[OK<br/>code=FACE_DISAGREEMENT_RESCUED]
+    R2 -->|NO| Gate{Decision<br/>is OK?}
+
+    Gate -->|no| Skip
+    Gate -->|yes| R3
+
+    R3{"R3: Guardian consent?<br/>required but not provided?"}
+    R3 -->|YES| NR3[NEEDS_REVIEW<br/>code=DATA_MISMATCH]
+    R3 -->|NO| R4
+
+    R4{"R4: Stealth minor?<br/>DOB under 18 at reference date<br/>but guardian_consent_required<br/>is not true?"}
+    R4 -->|YES| NR4[NEEDS_REVIEW<br/>code=DATA_MISMATCH]
+    R4 -->|NO| Final[KEEP AS OK]
+
+    NR1 & Rescue & NR3 & NR4 & Final & Skip --> PostStart
+
+    subgraph Post["POST-PROCESSING"]
+    P1["PII redaction (rationale + analysis); persist record/history"]
+        P2["CloudWatch metrics"]
+    end
+
+    P1 --> P2
+
+    style R1 fill:#E17055,color:#fff
+    style R2 fill:#E17055,color:#fff
+    style R3 fill:#E17055,color:#fff
+    style R4 fill:#E17055,color:#fff
+    style Gate fill:#D63031,color:#fff
+    style Final fill:#00B894,color:#fff
+    style Rescue fill:#00B894,color:#fff
+    style Post fill:#0984E3,color:#fff

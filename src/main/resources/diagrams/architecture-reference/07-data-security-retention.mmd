@@ -1,0 +1,20 @@
+%% Current state. Sources: storage-stack.ts, security-stack.ts, DATA-MODEL.md. Verified 2026-09-13.
+flowchart TB
+  Input[Applicant data and evidence] --> API[API/Lambda boundary]
+  API --> DDB[DynamoDB core table\nAPP#id / METADATA, state, outcomes, audit]
+  API --> Documents[Documents S3\nidentity files, liveness reference, disputes]
+  DDB --> Workflow[Verification Lambdas / Step Functions]
+  Documents --> Workflow
+  Workflow --> Certificates[Certificate S3]
+  subgraph Protection[Protection]
+    KMS[Separate KMS domains: S3, DynamoDB, secrets/SQS, logs/CloudTrail]
+    IAM[Least-privilege roles; Cognito/customer auth; custom admin/business authorizers]
+    Trail[CloudTrail, CloudWatch logs, X-Ray]
+  end
+  KMS -. encrypts .-> DDB & Documents & Certificates
+  IAM -. authorizes .-> API & Workflow
+  Workflow -. audit/telemetry .-> Trail
+  DDB --> TTL[Application/audit TTL: 365 days]
+  Documents --> Life[Glacier after 60d; expiry after 400d\ndispute/certificate expiry 365d]
+  TTL --> Cleanup[TTL-triggered S3 cleanup; daily orphan reaper]
+  style Protection fill:#2D3436,color:#fff

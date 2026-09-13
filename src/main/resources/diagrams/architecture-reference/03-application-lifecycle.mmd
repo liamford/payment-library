@@ -1,0 +1,18 @@
+%% Current state. Sources: API handlers, verification stack, DATA-MODEL.md. Verified 2026-09-13.
+flowchart TD
+  Start[Create/resume application] --> Details[Personal, contact, address, name and identity data]
+  Details --> Payment[Customer payment or reserved business credit]
+  Payment --> Evidence[Upload documents; liveness mobile handoff when used]
+  Evidence --> PreUpload[Upload-time OCR/metadata, Rekognition hints, liveness result]
+  PreUpload --> Consent[Consent and submission prerequisites]
+  Consent --> Submit[Submit API writes SUBMITTED]
+  Submit --> SQS[Submission SQS] --> Trigger[workflow-trigger] --> Workflow[Verification workflow]
+  Workflow -->|NEEDS_REVIEW / error| Review[Manual review notification and admin operations]
+  Workflow -->|NDCO / non-DCO| Certificate[Certificate generation and delivery]
+  Workflow -->|DCO| Window[Dispute window: hold certificate/external delivery]
+  Window --> Close[Waive, sweep expiry, withdrawal, or admin resolution]
+  Close --> Certificate
+  Certificate --> Retention[DynamoDB TTL and S3 lifecycle / cleanup]
+  style Workflow fill:#6C5CE7,color:#fff
+  style Review fill:#D63031,color:#fff
+  style Certificate fill:#00B894,color:#fff

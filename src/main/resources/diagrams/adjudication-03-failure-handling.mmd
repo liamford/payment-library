@@ -1,0 +1,50 @@
+%% Current state. Sources: adjudicate/index.ts and verification-stack.ts. Verified 2026-09-13.
+flowchart TD
+    Start[Bedrock invocation] --> Result{How did it respond?}
+
+    Result -->|guardrail_intervened<br/>stopReason = guardrail_intervened| Guardrail[GuardrailBlockedError]
+    Guardrail --> GuardrailLog[log warning + emit metric<br/>Verification.Bedrock.GuardrailTripCount]
+    GuardrailLog --> GuardrailNR[NEEDS_REVIEW<br/>cause = SYSTEM_ERROR<br/>code = GUARDRAIL_BLOCK<br/>NO fallback retry]
+
+    Result -->|timed out<br/>90 second abort signal| Timeout[TimeoutError]
+    Timeout --> FallbackGate1{fallback model ID<br/>configured?}
+    FallbackGate1 -->|yes| FallbackRetry1[Validate configured fallback inference profile<br/>then retry with fallback model]
+    FallbackGate1 -->|no| TimeoutNR[NEEDS_REVIEW<br/>cause = SYSTEM_ERROR<br/>code = MODEL_TIMEOUT<br/>emit metric]
+
+    FallbackRetry1 --> FallbackOK1{Succeeded?}
+    FallbackOK1 -->|yes| NormalFlow[Continue to normal<br/>override rules processing]
+    FallbackOK1 -->|no, also failed| TimeoutNR
+
+    Result -->|malformed output after<br/>up to 3 primary attempts| Malformed{Caught error type?}
+    Malformed -->|SyntaxError| Malformed1
+    Malformed -->|missing required fields| Malformed1
+    Malformed -->|did not use formatter tool| Malformed1
+    Malformed -->|INVALID_DECISION_VALUE| Malformed1
+    Malformed -->|INVALID_CHECK_RESULT| Malformed1
+
+    Malformed1[MALFORMED_OUTPUT] --> FallbackGate2{fallback model ID<br/>configured?}
+    FallbackGate2 -->|yes| FallbackRetry2[Validate configured fallback inference profile<br/>then retry with fallback model]
+    FallbackGate2 -->|no| MalformedNR[NEEDS_REVIEW<br/>cause = SYSTEM_ERROR<br/>code = MALFORMED_OUTPUT<br/>emit metric]
+
+    FallbackRetry2 --> FallbackOK2{Succeeded?}
+    FallbackOK2 -->|yes| NormalFlow
+    FallbackOK2 -->|no, also failed| MalformedNR
+
+    Result -->|unexpected error| Unknown[Throw error to Step Functions]
+    Unknown --> StepRetry[Step Functions retry policy:<br/>ThrottlingException/ServiceUnavailable: 3x backoff 2<br/>ModelStreamErrorTimeout/TaskTimedOut: 1x<br/>ModelErrorException/Timeout/NotReady: 2x<br/>States.TaskFailed: 2x]
+    StepRetry -->|still failing| HandleError[HandleError Lambda<br/>log, set ERROR state,<br/>notify ops via SNS]
+
+    subgraph DocSizeErrors["DOCUMENT SIZE CHECKS (before LLM call)"]
+        DS1["Any single image > 2.8MB?"]
+        DS1 -->|yes| DSNR1[NEEDS_REVIEW<br/>code = DOCUMENT_TOO_LARGE]
+        DS2["Total evidence > 15MB?"]
+        DS2 -->|yes| DSNR2[NEEDS_REVIEW<br/>code = EVIDENCE_TOO_LARGE]
+    end
+
+    DocSizeErrors -.->|also returns here| DSNR1
+    DocSizeErrors -.-> DSNR2
+
+    style NormalFlow fill:#00B894,color:#fff
+    style GuardrailNR fill:#D63031,color:#fff
+    style TimeoutNR fill:#D63031,color:#fff
+    style MalformedNR fill:#D63031,color:#fff

@@ -1,0 +1,31 @@
+%% Current state. Sources: infra/lib/servo-stack.ts and infra/lib/stacks/*.ts. Verified 2026-09-13.
+flowchart TB
+  subgraph Edge[Edge and identity]
+    CDN[CDN stack: CloudFront, Route 53, OAC, headers]
+    Auth[Auth stack: Cognito, triggers, Location identity pool]
+    APIs[API/Admin/Business stacks: API Gateway, authorizers, WAF]
+  end
+  subgraph Core[Core data and workflow]
+    Queue[Submission SQS + DLQ]
+    Trigger[workflow-trigger Lambda]
+    SFN[Verification Standard Step Functions]
+    Lambdas[Verification, API, admin and business Lambdas]
+    DDB[Core DynamoDB single table]
+    Docs[Documents S3]
+    Certs[Certificates S3]
+  end
+  subgraph Safety[Security and operations]
+    Security[Security stack: KMS, Secrets Manager, CloudTrail]
+    Monitor[Monitoring stack: CloudWatch, X-Ray, SNS, Slack notifier]
+  end
+  CDN --> APIs
+  Auth --> APIs
+  APIs --> Lambdas --> DDB
+  Lambdas --> Docs
+  APIs --> Queue --> Trigger --> SFN --> Lambdas
+  Lambdas --> Certs
+  Security -. encryption / least privilege .-> DDB & Docs & Certs & Queue
+  Lambdas -. logs, traces, metrics .-> Monitor
+  SFN -. execution logs .-> Monitor
+  style SFN fill:#6C5CE7,color:#fff
+  style Security fill:#2D3436,color:#fff

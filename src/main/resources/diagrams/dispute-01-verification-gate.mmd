@@ -1,0 +1,50 @@
+%% Current state. Source: infra/lib/stacks/verification-stack.ts. Verified 2026-09-13.
+flowchart TD
+    subgraph Pipeline["Verification State Machine"]
+        A[PrepareEvidence]
+        B[AdjudicateApplication]
+        C[StoreResult]
+        D[VEVO and ACIC checks]
+        E[StoreACICResult]
+        F[MergeResults]
+        G{CheckDisputeGate}
+        H[OpenDisputeWindow<br/>status DISPUTE_WINDOW_OPEN<br/>email applicant detail]
+        I[GenerateCertificate]
+        J[GenerateVevoCertificate]
+        K[SendNotification]
+        L[HandleError]
+    end
+
+    subgraph Held["DCO Hold"]
+        M[No certificate generated]
+        N[No employer or third-party delivery]
+        O[Applicant can accept result<br/>or raise dispute before deadline]
+    end
+
+    subgraph Immediate["Immediate Finalisation"]
+        P[Certificate identity and PDF issued<br/>where payer rules allow]
+        Q[Applicant, employer, or third party<br/>notified by existing rules]
+    end
+
+    A --> B --> C --> D --> E --> F --> G
+    G -->|ACIC DCO| H
+    H --> M --> N --> O
+    G -->|NDCO, timeout, referred, or non-DCO| I --> J --> K
+    I --> P --> Q
+    K --> Q
+    A -. catch .-> L
+    B -. catch .-> L
+    C -. catch .-> L
+    D -. catch .-> L
+    E -. catch .-> L
+    F -. catch .-> L
+    H -. catch .-> L
+    I -. catch .-> L
+    J -. catch .-> L
+    K -. catch .-> L
+
+    style G fill:#6C5CE7,color:#fff
+    style H fill:#FDCB6E,color:#333
+    style M fill:#D63031,color:#fff
+    style P fill:#00B894,color:#fff
+    style L fill:#2D3436,color:#fff

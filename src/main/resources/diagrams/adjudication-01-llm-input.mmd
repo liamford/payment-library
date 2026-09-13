@@ -1,0 +1,39 @@
+%% Current state. Sources: infra/lambda/verification/prepare-evidence and adjudicate/*. Verified 2026-09-13.
+flowchart TD
+    subgraph Source["DATA"]
+        A1["DynamoDB<br/>application + personal data"]
+        A2["S3 document bucket<br/>identity doc images + selfie"]
+    end
+
+    subgraph Prep["PREPARE-EVIDENCE LAMBDA"]
+        B1["Read application from DDB<br/>get personal details, name chain"]
+        B2["Rekognition CompareFaces<br/>selfie vs ID photo → similarity"]
+        B3["Rekognition DetectFaces<br/>count faces on ID document"]
+        B4["Validate sizes/pages<br/>2.8MB image, 4MB PDF/20 pages, 15MB total"]
+        B5["Assemble AdjudicationInput<br/>all fields, docs, biometrics, tiers"]
+    end
+
+    A1 --> B1 & B5
+    A2 --> B2 & B4
+    B1 --> B2 --> B3 --> B5
+
+    subgraph Prompt["ADJUDICATION LAMBDA builds the prompt"]
+        C1["System prompt: identity, tolerances,<br/>reason codes, examples, MRZ/DOC INTEGRITY<br/>+ name change rules if former names exist"]
+        C2["User prompt: trusted &lt;verified_context&gt;<br/>+ untrusted &lt;applicant_claim&gt;"]
+        C3["Pre-compute: name match<br/>(deterministic)<br/>via buildDeterministicAnnotation"]
+        C4["Load document images<br/>from S3 as contentBlocks"]
+        C5["Load selfie image"]
+    end
+
+    B5 --> C1 & C2 & C3
+    A2 --> C4 & C5
+
+    subgraph Call["BEDROCK CALL"]
+        D1["ConverseCommand<br/>system + evidence + guardrail<br/>Sonnet 4.6 profile; enforced tool output<br/>max 4096 tokens, 90s timeout"]
+    end
+
+    C1 & C2 & C3 & C4 & C5 --> D1
+    D1 --> E["Send to Bedrock"]
+
+    style Prep fill:#f3e5f5,color:#000
+    style Call fill:#6C5CE7,color:#fff

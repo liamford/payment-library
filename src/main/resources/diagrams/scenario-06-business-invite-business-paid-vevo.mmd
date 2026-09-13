@@ -1,0 +1,65 @@
+%% Current state. Sources: business API, verification stack, invitation/credit handlers. Verified 2026-09-13.
+flowchart TD
+    subgraph Business["Business"]
+        B1[Register<br/>ABN validated,<br/>PENDING_APPROVAL] --> B2[Admin approves]
+        B2 --> B3[Purchase credits<br/>via Stripe/Airwallex<br/>standard + VEVO credits]
+        B3 --> B4[Invite staff<br/>vevo_requested=true<br/>paid_by_business=true<br/>credits reserved for both<br/>SES invitation email sent]
+    end
+
+    subgraph Applicant["Applicant"]
+        A1[Receives email<br/>clicks invite link] --> A2[Sign up / Sign in]
+        A2 --> A3[Fill application<br/>personal details, address,<br/>identity docs, passport details]
+        A3 --> A4[Upload docs + selfie]
+        A4 --> A5[Submit<br/>no payment needed<br/>credits already reserved]
+    end
+
+    subgraph Pipeline["Verification Pipeline"]
+        F[Prepare Evidence<br/>Rekognition face compare<br/>Name chain, tier]
+        G[Adjudicate<br/>Bedrock Claude Sonnet 4.6]
+        H{Decision?}
+        I[Store Result]
+        J[Check VEVO<br/>SOAP DHA work entitlement]
+        K{VEVO error?}
+        L[SubmitToACIC<br/>SOAP police check]
+        M[Poll ACIC<br/>every 24h, max 90d]
+        N{ACIC result?}
+        O[StoreACICResult]
+        P[MergeResults<br/>pass-through]
+        DG{CheckDisputeGate}
+    end
+
+    subgraph Result["Result"]
+        DCO[Open dispute window<br/>5m sandbox / 48h prod<br/>applicant sees DCO detail; business sees RESULT_PENDING]
+        DCO_close[Waive, expire, withdraw,<br/>or admin resolve]
+        R_staff[RESULT_BUSINESS_STAFF<br/>inform applicant check completed<br/>no results or certificate delivered]
+        R_biz[RESULT_BUSINESS_ALERT<br/>notify business to view results<br/>on dashboard]
+        R_review[MANUAL_REVIEW notice<br/>to applicant + employer]
+        R_credit[Credits consumed<br/>from reserved balance<br/>standard + VEVO]
+    end
+
+    B4 -.-> A1
+    A5 --> SQ[Submission SQS → workflow-trigger] --> F --> G --> H
+    H -->|OK| I
+    H -->|NEEDS_REVIEW| R_review
+    I --> J --> K
+    K -->|ERROR / UNAVAILABLE| R_review
+    K -->|SUCCEEDED / NOT_APPLICABLE| L
+    L --> M --> N
+    N -->|NDCO/DCO| O --> P --> DG
+    DG -->|NDCO| R_staff --> R_biz --> R_credit
+    DG -->|DCO| DCO --> DCO_close --> R_staff
+    DG -->|timeout / non-DCO| R_staff
+    N -->|timeout >= 90d| P --> DG
+    N -->|POLLFAILED/REFERRED| M
+
+    style DG fill:#6C5CE7,color:#fff
+    style DCO fill:#D63031,color:#fff
+    style DCO_close fill:#FDCB6E,color:#333
+    style G fill:#6C5CE7,color:#fff
+    style B2 fill:#00B894,color:#fff
+    style B3 fill:#0984E3,color:#fff
+    style B4 fill:#E17055,color:#fff
+    style K fill:#D63031,color:#fff
+    style R_staff fill:#0984E3,color:#fff
+    style R_biz fill:#00B894,color:#fff
+    style R_review fill:#D63031,color:#fff

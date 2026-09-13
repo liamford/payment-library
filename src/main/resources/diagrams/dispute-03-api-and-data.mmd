@@ -1,0 +1,76 @@
+%% Current state. Sources: openapi/individual.yaml, openapi/admin.yaml, dispute handlers. Verified 2026-09-13.
+flowchart LR
+    subgraph Customer["Customer API"]
+        C1[POST /v1/applications/id/dispute<br/>raise-dispute]
+        C2[GET /v1/applications/id/dispute<br/>get-dispute]
+        C3[POST /v1/applications/id/dispute/messages<br/>add-dispute-message]
+        C4[POST /v1/applications/id/dispute/waive<br/>waive-dispute-window]
+        C5[POST /v1/applications/id/dispute/withdraw<br/>withdraw-dispute]
+    end
+
+    subgraph Admin["Admin API"]
+        A1[GET /admin/v1/disputes/open<br/>list-open-disputes]
+        A2[GET /admin/v1/applications/id/dispute<br/>get-dispute]
+        A3[POST /admin/v1/applications/id/dispute/replies/draft<br/>draft-dispute-reply]
+        A4[POST /admin/v1/applications/id/dispute/replies/messageId/send<br/>send-dispute-reply]
+        A5[PUT /admin/v1/applications/id/dispute/result<br/>update-dispute-result]
+        A6[POST /admin/v1/applications/id/dispute/resolve<br/>resolve-dispute]
+        A7[POST /admin/v1/applications/id/dispute/resend-delivery<br/>resend-dispute-delivery]
+        A8[POST /admin/v1/applications/id/dispute/escalate<br/>escalate-dispute]
+        A9[POST /admin/v1/applications/id/dispute/analyse-evidence<br/>analyse-dispute-evidence]
+    end
+
+    subgraph Data["DynamoDB Core Table"]
+        D1[Application<br/>PK APP#id<br/>SK METADATA]
+        D2[Dispute singleton<br/>PK APP#id<br/>SK DISPUTE]
+        D3[Dispute messages<br/>PK APP#id<br/>SK DISPUTEMSG#timestamp#uuid]
+        D4[GSI8 window queue<br/>WINDOW#OPEN<br/>deadline sorted]
+        D5[GSI8 admin queue<br/>DISPUTE#OPEN<br/>status and raised time sorted]
+        D6[Audit log items]
+    end
+
+    subgraph Evidence["Evidence Storage"]
+        S1[S3 quarantine prefix<br/>disputes/id/quarantine/]
+        S2[scan-dispute-evidence]
+        S3[S3 accepted prefix<br/>disputes/id/]
+    end
+
+    C1 --> D1
+    C1 --> D2
+    C1 --> S1
+    C2 --> D2
+    C2 --> D3
+    C3 --> D3
+    C4 --> D1
+    C5 --> D2
+
+    A1 --> D5
+    A2 --> D2
+    A2 --> D3
+    A3 --> D3
+    A4 --> D3
+    A5 --> D2
+    A6 --> D2
+    A7 --> D2
+    A8 --> D1
+    A9 --> S3
+    A9 --> D2
+
+    D1 --> D4
+    D2 --> D5
+    S1 --> S2 --> S3
+    C1 --> D6
+    C3 --> D6
+    C4 --> D6
+    C5 --> D6
+    A4 --> D6
+    A5 --> D6
+    A6 --> D6
+    A8 --> D6
+    A9 --> D6
+
+    style C1 fill:#0984E3,color:#fff
+    style A1 fill:#6C5CE7,color:#fff
+    style D2 fill:#FDCB6E,color:#333
+    style D5 fill:#00B894,color:#fff
+    style S2 fill:#D63031,color:#fff

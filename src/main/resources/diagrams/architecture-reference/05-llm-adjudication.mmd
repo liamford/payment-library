@@ -1,0 +1,22 @@
+%% Current state. Sources: verification/prepare-evidence, verification/adjudicate, prompt.ts, config.ts. Verified 2026-09-13.
+flowchart TD
+  App[DynamoDB application + S3 evidence] --> Prep[PrepareEvidence: set ADJUDICATING; face compare/detect; liveness; size/page checks; tier and name-chain structure]
+  Prep --> Preflight{Deterministic preflight}
+  Preflight -->|missing evidence, incomplete tier/name chain, guardian/age issue, similarity <90%, liveness < review| NR[NEEDS_REVIEW record]
+  Preflight -->|passes| Prompt[Build prompt: system policy + trusted verified_context + untrusted applicant_claim]
+  Prompt --> Load[Load documents/PDFs and selfie from S3]
+  Load --> Limits{2.8MB image; 4MB/20-page PDF; 15MB total; 160k input-token safety limit}
+  Limits -->|exceeded| NR
+  Limits -->|within limits| Bedrock[Bedrock Converse vision\nClaude Sonnet 4.6 profile; guardrail; formatter tool; max 4096; 90s]
+  Bedrock --> Shape{Valid structured record?}
+  Shape -->|yes| Validate[Validate decision/checks/reason codes; model_decision; confidence floor]
+  Shape -->|malformed / provider failure| Retry[Retry primary up to 3 malformed attempts; then validate fallback inference profile and call fallback]
+  Bedrock -->|guardrail block| NR
+  Retry -->|success| Validate
+  Retry -->|failure| NR
+  Validate --> Overrides[Server overrides: biometric fail; biometric rescue; guardian/under-18 guard]
+  Overrides --> Redact[Redact rationale/analysis PII; write adjudication record/history]
+  Redact --> Metrics[Decision, confidence, latency, token and failure metrics] --> Output[StoreResult routes OK to external checks; NEEDS_REVIEW to notification]
+  style Bedrock fill:#6C5CE7,color:#fff
+  style NR fill:#D63031,color:#fff
+  style Output fill:#00B894,color:#fff
